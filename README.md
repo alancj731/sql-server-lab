@@ -22,6 +22,14 @@ The product and architecture specification is [`SQL_SERVER_LAB_BUILD_PLAN.md`](S
 
 Pages for later milestones (Index lab, Deadlock lab, Backups, Maintenance) exist as clearly labelled placeholders.
 
+## Known issues
+
+- **Azure labs do not reach `Ready` yet.** The lab VM deploys, but SQL Server on the Ubuntu VM never answers the
+  worker's health check, so provisioning retries for several hours and the lab ends `Failed` (then is deleted by
+  expiry). Under investigation: the first-boot install (`infra/bicep/lab/setup-sql.sh`) or the network path to 1433.
+  Avoid creating Azure labs until this is fixed; local (simulated) mode is unaffected.
+- **Expired labs are not deleted while a job is still retrying**, so a stuck lab can outlive its TTL.
+
 ## Repository layout
 
 ```text
