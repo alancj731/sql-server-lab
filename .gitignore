@@ -1,0 +1,31 @@
+# .NET
+bin/
+obj/
+*.user
+TestResults/
+design-time.db
+
+# Local control-plane data (SQLite)
+.data/
+
+# Node / Angular
+node_modules/
+frontend/dist/
+frontend/.angular/
+frontend/.e2e-data/
+frontend/test-results/
+frontend/playwright-report/
+
+# Secrets and local overrides — never commit
+appsettings.Local.json
+*.secrets.json
+.env
+.env.*
+
+# OS / editors
+.DS_Store
+.idea/
+.vs/
+
+# Deployment state (identifiers only, no secrets)
+.deploy/

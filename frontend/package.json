@@ -1,0 +1,52 @@
+{
+  "name": "sql-server-lab",
+  "version": "0.0.0",
+  "scripts": {
+    "ng": "ng",
+    "start": "ng serve",
+    "build": "ng build",
+    "watch": "ng build --watch --configuration development",
+    "test": "ng test --watch=false",
+    "lint": "ng lint",
+    "format:check": "prettier --check \"src/**/*.{ts,html,scss}\" \"e2e/**/*.ts\"",
+    "generate:openapi": "cd ../backend/src/SqlServerLab.Api && ControlDb__ConnectionString=\"Data Source=:memory:\" dotnet build -p:OpenApiGenerateDocumentsOnBuild=true",
+    "generate:api": "npm run generate:openapi && openapi-typescript src/app/api/openapi.json -o src/app/api/schema.d.ts && prettier --write src/app/api/schema.d.ts",
+    "e2e": "dotnet build ../backend/SqlServerLab.slnx --nologo -v quiet && playwright test"
+  },
+  "private": true,
+  "packageManager": "npm@10.9.8",
+  "dependencies": {
+    "@angular/cdk": "^22.2.1",
+    "@angular/common": "^22.2.0",
+    "@angular/compiler": "^22.2.0",
+    "@angular/core": "^22.2.0",
+    "@angular/forms": "^22.2.0",
+    "@angular/material": "^22.2.1",
+    "@angular/platform-browser": "^22.2.0",
+    "@angular/router": "^22.2.0",
+    "@azure/msal-browser": "^5.23.0",
+    "@microsoft/signalr": "^10.0.11",
+    "rxjs": "~7.8.0",
+    "tslib": "^2.3.0"
+  },
+  "devDependencies": {
+    "@angular/build": "^22.2.0",
+    "@angular/cli": "^22.2.0",
+    "@angular/compiler-cli": "^22.2.0",
+    "@eslint/js": "^10.0.1",
+    "@playwright/test": "^1.63.0",
+    "angular-eslint": "22.5.0",
+    "eslint": "^10.9.1",
+    "jsdom": "^30.0.0",
+    "openapi-typescript": "^7.13.0",
+    "prettier": "^3.8.1",
+    "typescript": "~6.0.2",
+    "typescript-eslint": "8.69.0",
+    "vitest": "^5.0.0"
+  },
+  "overrides": {
+    "openapi-typescript": {
+      "typescript": "$typescript"
+    }
+  }
+}

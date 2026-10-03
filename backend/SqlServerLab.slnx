@@ -1,0 +1,16 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SqlServerLab.Api/SqlServerLab.Api.csproj" />
+    <Project Path="src/SqlServerLab.Application/SqlServerLab.Application.csproj" />
+    <Project Path="src/SqlServerLab.Domain/SqlServerLab.Domain.csproj" />
+    <Project Path="src/SqlServerLab.Infrastructure/SqlServerLab.Infrastructure.csproj" />
+    <Project Path="src/SqlServerLab.Migrations.SqlServer/SqlServerLab.Migrations.SqlServer.csproj" />
+    <Project Path="src/SqlServerLab.Worker/SqlServerLab.Worker.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/SqlServerLab.Api.Tests/SqlServerLab.Api.Tests.csproj" />
+    <Project Path="tests/SqlServerLab.Application.Tests/SqlServerLab.Application.Tests.csproj" />
+    <Project Path="tests/SqlServerLab.Domain.Tests/SqlServerLab.Domain.Tests.csproj" />
+    <Project Path="tests/SqlServerLab.Infrastructure.Tests/SqlServerLab.Infrastructure.Tests.csproj" />
+  </Folder>
+</Solution>

@@ -1,0 +1,188 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.47.16.16243",
+      "templateHash": "2767337405447935636"
+    }
+  },
+  "parameters": {
+    "labId": {
+      "type": "string",
+      "metadata": {
+        "description": "Lab ID (GUID)."
+      }
+    },
+    "vmName": {
+      "type": "string",
+      "maxLength": 15,
+      "metadata": {
+        "description": "VM/computer name, max 15 characters."
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]"
+    },
+    "vmSize": {
+      "type": "string",
+      "defaultValue": "Standard_D2s_v7"
+    },
+    "diskControllerType": {
+      "type": "string",
+      "defaultValue": "NVMe",
+      "allowedValues": [
+        "SCSI",
+        "NVMe"
+      ],
+      "metadata": {
+        "description": "v6+ sizes expose NVMe disks only; older sizes use SCSI."
+      }
+    },
+    "subnetId": {
+      "type": "string",
+      "metadata": {
+        "description": "Resource ID of the shared lab subnet (no public access)."
+      }
+    },
+    "adminUsername": {
+      "type": "string",
+      "defaultValue": "labadmin"
+    },
+    "adminPassword": {
+      "type": "securestring"
+    },
+    "saPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "SQL Server sa password; used once during setup, after which sa is disabled."
+      }
+    },
+    "sqlLogin": {
+      "type": "string",
+      "defaultValue": "labworker",
+      "metadata": {
+        "description": "SQL authentication login used by the worker for health checks and experiments."
+      }
+    },
+    "sqlPassword": {
+      "type": "securestring"
+    },
+    "tags": {
+      "type": "object",
+      "metadata": {
+        "description": "Tags required on every lab resource: labId, ownerId, environment, createdAt, expiresAt."
+      }
+    }
+  },
+  "variables": {
+    "$fxv#0": "#!/bin/bash\n# First-boot setup for a lab VM (cloud-init runs this once): installs SQL Server 2022 Developer Edition from\n# Microsoft's apt repository, sets a generated SA password, creates the worker's SQL login, and disables sa.\n# Placeholders are replaced by the Bicep template from secure parameters; output never echoes passwords.\nset -euo pipefail\nexec >/var/log/sqllab-setup.log 2>&1\nexport DEBIAN_FRONTEND=noninteractive\n\nSA_PASSWORD='__SA_PASSWORD__'\nLAB_LOGIN='__SQL_LOGIN__'\nLAB_PASSWORD='__SQL_PASSWORD__'\n\ncurl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /usr/share/keyrings/microsoft-prod.gpg\ncurl -fsSL https://packages.microsoft.com/config/ubuntu/22.04/mssql-server-2022.list -o /etc/apt/sources.list.d/mssql-server-2022.list\ncurl -fsSL https://packages.microsoft.com/config/ubuntu/22.04/prod.list -o /etc/apt/sources.list.d/mssql-release.list\n\nfor _ in 1 2 3; do\n  if apt-get update; then break; fi\n  sleep 20\ndone\napt-get install -y mssql-server\nACCEPT_EULA=Y apt-get install -y mssql-tools18 unixodbc-dev\n\nMSSQL_SA_PASSWORD=\"$SA_PASSWORD\" MSSQL_PID=Developer ACCEPT_EULA=Y /opt/mssql/bin/mssql-conf -n setup\nsystemctl enable --now mssql-server\n\nsql() { /opt/mssql-tools18/bin/sqlcmd -C -b -S localhost -U sa -P \"$SA_PASSWORD\" -Q \"$1\"; }\nfor _ in $(seq 1 60); do\n  if sql \"SELECT 1\" >/dev/null; then break; fi\n  sleep 5\ndone\n\nsql \"IF SUSER_ID(N'$LAB_LOGIN') IS NULL CREATE LOGIN [$LAB_LOGIN] WITH PASSWORD = N'$LAB_PASSWORD', CHECK_POLICY = ON;\n     ALTER SERVER ROLE sysadmin ADD MEMBER [$LAB_LOGIN];\"\n# Normal operations never use sa.\n/opt/mssql-tools18/bin/sqlcmd -C -b -S localhost -U \"$LAB_LOGIN\" -P \"$LAB_PASSWORD\" -Q \"ALTER LOGIN sa DISABLE;\"\necho \"sqllab setup complete\"\n"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.Network/networkInterfaces",
+      "apiVersion": "2024-05-01",
+      "name": "[format('nic-{0}', parameters('vmName'))]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "ipConfigurations": [
+          {
+            "name": "ipconfig1",
+            "properties": {
+              "privateIPAllocationMethod": "Dynamic",
+              "subnet": {
+                "id": "[parameters('subnetId')]"
+              }
+            }
+          }
+        ]
+      }
+    },
+    {
+      "type": "Microsoft.Compute/virtualMachines",
+      "apiVersion": "2024-07-01",
+      "name": "[parameters('vmName')]",
+      "location": "[parameters('location')]",
+      "tags": "[parameters('tags')]",
+      "properties": {
+        "hardwareProfile": {
+          "vmSize": "[parameters('vmSize')]"
+        },
+        "securityProfile": {
+          "securityType": "TrustedLaunch",
+          "uefiSettings": {
+            "secureBootEnabled": true,
+            "vTpmEnabled": true
+          }
+        },
+        "storageProfile": {
+          "diskControllerType": "[parameters('diskControllerType')]",
+          "imageReference": {
+            "publisher": "Canonical",
+            "offer": "0001-com-ubuntu-server-jammy",
+            "sku": "22_04-lts-gen2",
+            "version": "latest"
+          },
+          "osDisk": {
+            "name": "[format('osdisk-{0}', parameters('vmName'))]",
+            "createOption": "FromImage",
+            "deleteOption": "Delete",
+            "diskSizeGB": 64,
+            "managedDisk": {
+              "storageAccountType": "StandardSSD_LRS"
+            }
+          }
+        },
+        "osProfile": {
+          "computerName": "[parameters('vmName')]",
+          "adminUsername": "[parameters('adminUsername')]",
+          "adminPassword": "[parameters('adminPassword')]",
+          "customData": "[base64(replace(replace(replace(variables('$fxv#0'), '__SA_PASSWORD__', parameters('saPassword')), '__SQL_LOGIN__', parameters('sqlLogin')), '__SQL_PASSWORD__', parameters('sqlPassword')))]",
+          "linuxConfiguration": {
+            "disablePasswordAuthentication": false,
+            "provisionVMAgent": true,
+            "patchSettings": {
+              "patchMode": "ImageDefault",
+              "assessmentMode": "ImageDefault"
+            }
+          }
+        },
+        "networkProfile": {
+          "networkInterfaces": [
+            {
+              "id": "[resourceId('Microsoft.Network/networkInterfaces', format('nic-{0}', parameters('vmName')))]",
+              "properties": {
+                "deleteOption": "Delete"
+              }
+            }
+          ]
+        },
+        "diagnosticsProfile": {
+          "bootDiagnostics": {
+            "enabled": true
+          }
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.Network/networkInterfaces', format('nic-{0}', parameters('vmName')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "labId": {
+      "type": "string",
+      "value": "[parameters('labId')]"
+    },
+    "vmResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.Compute/virtualMachines', parameters('vmName'))]"
+    },
+    "privateIp": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.Network/networkInterfaces', format('nic-{0}', parameters('vmName'))), '2024-05-01').ipConfigurations[0].properties.privateIPAddress]"
+    }
+  }
+}
