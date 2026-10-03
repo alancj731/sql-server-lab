@@ -336,18 +336,37 @@ images() {
 s() { state_get "$ENV_NAME" "$1"; }
 
 # --------------------------------------------------------------------------------------------------------------
-migrate() {
-  phase "Control database migration"
-  local rg job execution status
-  rg="$(s resourceGroupName)"
-  job="$(az deployment group create --resource-group "$rg" --name "sqllab-migrate" \
+deploy_migrate_job() {
+  az deployment group create --resource-group "$1" --name "sqllab-migrate" \
     --template-file "$REPO_ROOT/infra/bicep/platform/migrate.bicep" \
     --parameters env="$ENV_NAME" location="$LOCATION" \
       containerAppsEnvironmentId="$(s containerAppsEnvironmentId)" acrLoginServer="$(s acrLoginServer)" \
       workerImage="$(s acrLoginServer)/sqllab-worker:$IMAGE_TAG" \
       migratorIdentityId="$(s migratorIdentityId)" migratorIdentityClientId="$(s migratorIdentityClientId)" \
       appIdentityName="$(s appIdentityName)" appIdentityClientId="$(s appIdentityClientId)" sqlServerFqdn="$(s sqlServerFqdn)" sqlDatabaseName="$(s sqlDatabaseName)" \
-    --query properties.outputs.jobName.value -o tsv)"
+    --query properties.outputs.jobName.value -o tsv
+}
+
+migrate() {
+  phase "Control database migration"
+  local rg job execution status
+  rg="$(s resourceGroupName)"
+  # Container Apps rejects job updates while it is still finishing a previous operation (ContainerAppsJobLockConflict);
+  # that is transient, so wait and retry instead of failing the whole deployment.
+  local attempt errors
+  errors="$(mktemp)"
+  for attempt in 1 2 3 4 5 6; do
+    if job="$(deploy_migrate_job "$rg" 2>"$errors")"; then
+      break
+    fi
+    if grep -q ContainerAppsJobLockConflict "$errors" && ((attempt < 6)); then
+      info "Migration job is busy with another operation; retrying in 30 s (attempt $attempt/6) …"
+      sleep 30
+      continue
+    fi
+    die "Deploying the migration job failed: $(head -c 600 "$errors")"
+  done
+  rm -f "$errors"
 
   execution="$(az containerapp job start --name "$job" --resource-group "$rg" --query name -o tsv)"
   info "Running $job ($execution) …"
